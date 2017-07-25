@@ -61,10 +61,16 @@ class Redlock(object):
         except AssertionError as e:
             raise ValueError(str(e))
         
-        return server.set(resource, val, nx=True, px=ttl)
+        #return server.set(resource, val, nx=True, px=ttl)
+        ret = server.setnx(resource, val)
+        if not ret:
+            return ret
+        return server.expire(resource, ttl)
     
     def unlock_script(self, server, resource, val):
-        value = server.get(resource).decode()
+        value = server.get(resource)
+        if value is not None:
+            value = value.decode()
         if value == val:
             return server.delete(resource)
         else:
@@ -76,7 +82,7 @@ class Redlock(object):
             if code == 1:
                 logging.info("unlock resource %s for server %s successfully." %(resource, str(server)))
             else:
-                err = "Error unlock resource %s for server %s." % (resource, str(server))
+                err = "Error unlock resource %s for server %s." % (resource, server)
                 raise Exception(err)
         except Exception as err:
             logging.exception(str(err))
@@ -115,8 +121,9 @@ class Redlock(object):
                         pass
                 retry += 1
                 time.sleep(self.retry_delay)
-        return False   
-
+                
+        return False
+            
     def unlock(self, lock):
         redis_error = list()
         for server in self.servers:
